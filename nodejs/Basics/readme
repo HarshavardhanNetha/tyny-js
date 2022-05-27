@@ -1,0 +1,7 @@
+Streams and buffers
+Large data can't load at once
+So, after loading some data, we use it.
+
+ex: swimming pool and water tanker
+YouTube buffer and Streams
+

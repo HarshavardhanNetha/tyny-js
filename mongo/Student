@@ -1,0 +1,116 @@
+# Check dbs
+show dbs
+
+# Use one of the dbs
+
+use Tyny
+
+# Create student collection
+db.createCollection('student')
+show collections
+
+# Check documents in collection
+db.student.find()
+
+# Insert one record 
+db.student.insert({name:'One', age: '20',address:{'dist':"RR","state":"TS"} })
+
+# Insert many records at once
+var arr = [{name:'Two', age: '26',address:{'dist':"WGL","state":"TS"}}, {name:'Three', age: '16',address:{'dist':"AMP","state":"AP"}}]
+db.student.insert(arr)
+
+var arr = [{name:'Four', age: '30',address:{'dist':"AMP","state":"AP"}}, {name:'Five', age: '46',address:{'dist':"AM","state":"KA"}}]
+db.student.update({name:"Five"},{$set: {age: 32}})
+
+# Did not work - All ages in string type to int Type
+> db.student.update({name:"One"},{$set: {age: {$toInt: $age}}})
+> https://stackoverflow.com/questions/4973095/how-to-change-the-type-of-a-field
+
+# Upsert - update and insert
+db.student.update({name:"Six"},{$set: {age: 18}},{upsert: true})
+
+# Check DB name
+db.getName()
+
+# Remove a document
+db.student.remove({"name":"Six"})
+
+# Added array of cell
+db.student.insert({name:"Six", age: 26, address: {dist:"RR","state":"AP"}, cell: [123,456]})
+
+# Update all with same cell
+db.student.update({},{$set: {cell: [123,456]}}, {multi: true})
+
+# Rename collection
+db.student.renameCollection('stu')
+
+# Duplicate collection
+db.stu.copyTo('student')
+
+# Retrieve age greater than 30
+db.student.find({age: {$gt:30}})
+
+# Address equal to some value
+db.student.find({"address.state": {$eq:"AP"}})
+
+# Age in in given array here: 20, 30
+db.student.find({age: {$in: [20,30]}})
+
+# Age greater than 30 and from AP state
+db.student.find({$and: [{"address.state":"AP"},{"age": {$gt: 20}}]})
+
+# Age less than 20 or greater than 30
+db.student.find({$or: [{"age": {$gt: 30}}, {age: {$lt: 20}}]})
+
+# Age between 20(inclusive) and 30(exclusive)
+db.student.find({age: {$lt: 30, $gte: 20}})
+
+# Address exists
+db.student.find({"address": {$exists: true}})
+
+# Has age and is > 30
+db.student.find({age: {$exists: true, $gt: 30}})
+
+# Has age of type string  / number
+db.student.find({age: {$type: "number"}})
+db.student.find({age: {$type: "string"}})
+db.student.find({age: {$type: "bool"}})
+
+# Push a new value to cell array
+db.student.update({"name":"One"},{$push: {cell : 7645}})
+
+# Append multiple values at once: pushAll
+# $each
+db.student.update({name:"One"},{$push: {cell: {$each: [123,987]} } })
+
+# Remove last and first elements in cell array
+db.student.update({name:"Two"},{$pop: {cell: 1}}) #last
+db.student.update({name:"Two"},{$pop: {cell: -1}}) #first
+
+# Display sum of ages of students of state AP
+> db.student.aggregate([{"$group": {"_id": {"address.state":"$address.state"}, "TotalAge": {$sum:"$age"} }}])
+> Tried this way but gives below error
+	"errmsg" : "FieldPath field names may not contain '.'.",
+> So as a workaround added a new flag to all the AP students and performed this
+
+db.student.aggregate([{"$group": {"_id": {'flag':"$flag"}, "TotalAge": {$sum: "$age"}}}])
+
+# Error resolved by changing the name of key
+db.student.aggregate([{"$group": {"_id": {"address":"AP"}, "TotalAge": {$sum:"$age"} }}])
+db.student.aggregate([{"$group": {"_id": {"address":"$address.state"}, "TotalAge": {$sum:"$age"} }}])
+
+
+# Display only some columns 
+db.student.find({},{name:1,age:1,_id:0})
+# using aggregate function
+db.student.aggregate({$project: {name:1}})
+
+# Display only state: AP students
+db.student.aggregate({$match: {"address.state":"AP"}})
+db.student.find({"address.state":"AP"})
+
+# Update all AP students with a new key flag:1
+db.student.update({"address.state":"AP"},{$set: {"flag":1} }, {multi:true})
+
+# Get EventSigners based on eventName from other collection
+db.event.aggregate([{$match: {name: "One"}},{$lookup: {from: "eventType", localField: "type", foreignField: "name", as: "Description"}}])
