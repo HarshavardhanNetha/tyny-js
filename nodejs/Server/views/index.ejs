@@ -1,13 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <!-- <title>Document</title> -->
+    <title>NetNinjs | <%= title %>
+    </title>
+
 </head>
+
 <body>
-    <h1>Testing Render HTML</h1>
-    <p>Holla</p>
+
+    <% const name="mango" ; console.log(name); %>
+
+        <h1>Testing Render HTML</h1>
+        <%- include('./partials/_navbar.ejs') %>
+
+            <!-- <p>
+            <%= name; %>
+                 to use a single variable in ejs 
+        </p> -->
+
+            <% if(blogs.length> 0) { %>
+
+                <% blogs.forEach( blog=> { %>
+
+
+                    <h2>
+                        <%= blog.title %>
+                    </h2>
+                    <p>
+                        <%= blog.content %>
+                    </p>
+
+                    <% } ) %>
+
+                        <% }%>
 </body>
+
 </html>
