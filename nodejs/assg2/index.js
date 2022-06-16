@@ -7,7 +7,7 @@ app.listen(3000)
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-const userList = []
+let userList = []
 
 app.get('/', (req,res) =>{
     res.send(userList)
@@ -32,5 +32,6 @@ app.delete('/', (req,res)=>{
     const newArr = userList.filter((data) =>{
         return data!==name
     })
+    userList = newArr
     res.send(newArr)
 })
