@@ -26,11 +26,14 @@
             <% if(blogs.length> 0) { %>
 
                 <% blogs.forEach( blog=> { %>
-
+                    
+                    <a href="/blogs/<%= blog._id %>">
 
                     <h2>
                         <%= blog.title %>
                     </h2>
+                </a>
+
                     <p>
                         <%= blog.content %>
                     </p>
@@ -38,6 +41,7 @@
                     <% } ) %>
 
                         <% }%>
+
 </body>
 
 </html>

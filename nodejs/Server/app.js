@@ -1,7 +1,8 @@
 const express = require('express')
 const morgan = require('morgan')
 const mongoose = require('mongoose')
-const Blog = require('./models/blog')
+const blogRoutes = require('./routes/blogRoutes')
+const sandboxRoutes = require('./routes/sandboxRoutes')
 
 const app = express()
 
@@ -35,19 +36,17 @@ app.use(morgan('dev'))
 
 // middleware to serve static files
 app.use(express.static('public'))
+app.use(express.urlencoded({ extended: true }))
 
 app.get('/', (req, res) => {
     // let blogs = [{ title: "Blog Number One", content: "This is content of blog number one." }, { title: "Blog Number Two", content: "This is content of blog number two." }]
     // res.send("<p>Home Page</p>")
     // res.sendFile('./views/index.html', {root: __dirname})
-    Blog.find().sort({ createdAt: -1 })
-        .then((result) => {
-            res.render('index', { title: "Home", blogs: result })
-            // res.send(result)
-        })
-        .catch((err) => {
-            res.send(err)
-        })
+    res.redirect('blogs')
+})
+
+app.post('/', (req, res) => {
+    res.redirect('blogs')
 })
 
 app.get('/about', (req, res) => {
@@ -61,42 +60,9 @@ app.get('/about-us', (req, res) => {
     res.redirect('/about')
 })
 
-app.get('/blog/create', (req, res) => {
-    res.render('create', { title: "Create Blog" })
-})
 
-app.get('/add-blog', (req, res) => {
-    const blog = new Blog({
-        title: "Number Two Blog to DB",
-        content: "The content of second blog will be updated shortly"
-    })
-    blog.save().then((result) => {
-        res.send(result)
-    })
-        .catch((err) => {
-            res.send(err)
-        })
-})
-
-app.get('/all-blogs', (req, res) => {
-    Blog.find()
-        .then((result) => {
-            res.send(result)
-        })
-        .catch((err) => {
-            res.send(err)
-        })
-})
-
-app.get('/single-blog', (req, res) => {
-    Blog.findById('62a5effa03aa4804a607b866')
-        .then((result) => {
-            res.send(result)
-        })
-        .catch((err) => {
-            res.send(err)
-        })
-})
+app.use(sandboxRoutes)
+app.use('/blogs', blogRoutes)
 
 //404 page
 app.use((req, res) => {
