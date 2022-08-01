@@ -14,6 +14,7 @@ app.get('/', (req,res) =>{
     res.send(userList)
 })
 
+
 app.post("/", (req,res)=>{
     const name = req.query.name
     // console.log("test" + name);
