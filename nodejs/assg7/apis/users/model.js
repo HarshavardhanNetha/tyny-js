@@ -5,7 +5,8 @@ let userSchema = new mongoose.Schema({
     email: {type: String},
     password: {type: String},
     dob: {type: String},
-    branch: {type: String}
+    branch: {type: String},
+    profilePic: {type: String}
 })
 
 exports.userModel = mongoose.model("users", userSchema)

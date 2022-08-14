@@ -2,6 +2,8 @@ const userModel = require("./model").userModel
 const bcrypt = require('bcrypt');
 const jwt = require("jsonwebtoken")
 const saltRounds = 10;
+const fs = require("fs")
+
 
 exports.signUpFun = async (req,res) => {
     try{
@@ -60,6 +62,39 @@ exports.getProfile = async (req,res) =>{
         res.send(err)
     }
 }
+
+exports.profilePic = async (req,res) =>{
+    try{
+        let response = await userModel.findOne({name: req.body.name})
+        console.log(response);
+        // let resp = req.files
+        console.log(req.files);
+        console.log(__dirname);
+        console.log("Test");
+        console.log("test" + req.files.data.originalFilename);
+        fs.copyFileSync(req.files.data.path,__dirname+"/../../images/"+req.files.data.originalFilename)
+
+        response.set({profilePic: __dirname+"/../../images/"+req.files.data.originalFilename})
+        console.log(response);
+        res.send({msg:"Files Fetched", data: response})
+    }
+    catch(err){
+        res.send(err)
+    }
+}
+
+// exports.profilePic = async (req,res) =>{
+//     try{
+//         console.log(req.files);
+//         let response = req.files
+//         res.send(response)
+//     }
+//     catch(err){
+//         res.send(err)
+//     }
+// }
+
+
 
 exports.signInFun = async (req,res) => {
     try{
