@@ -1,28 +1,26 @@
 const { ObjectID } = require("bson")
 const { Schema } = require("mongoose")
 const mongoose = require("mongoose")
+const {ObjectId} = require('mongodb'); 
 
-let bonuscreditlogs = [{
-    "_id":1000,
-    "credits":10,
-    "remainingCredits":10
-},
-{
-    "_id":1001,
-    "credits":20,
-    "remainingCredits":20
-}]
+
+let BonusCreditLogModel = null;
+let CampaignLogModel = null;
+let CreditConsumptionLogModel =  null;
+
 //retrieve only nonzero bonuscredit logs which have validity from old_to_new
 
-let campaigns = []
+let calculateAvailableCredits = async (needed, businessOwnerId) => {
+    // let creditsPresent = 0
+    let matchStage = {$expr: {$and: [{ $eq: ["$businessOwnerId",businessOwnerId]},{ $ne: ["$remainingCredits",0]}]}}
+    let groupStage = { _id: "$businessOwnerId", creds: { $sum: "$remainingCredits" } }
 
-let calculateAvailableCredits = async (needed) => {
-    let creditsPresent = 0
-    bonuscreditlogs.forEach((log) => {
-        creditsPresent+=log.credits
-    })
-    if(creditsPresent>=needed){
-        console.log(`Credits Present: ${creditsPresent}`)
+    let creditsPresent = await BonusCreditLogModel.aggregate([{$match: matchStage}, {$group: groupStage}])
+    // console.log("CreditsPresentLog")
+    // console.log(creditsPresent)
+    
+    if(creditsPresent.length && creditsPresent[0].creds >= needed ){
+        console.log(`Credits Present: ${creditsPresent[0].creds}`)
         return true
     }
     else{
@@ -30,64 +28,79 @@ let calculateAvailableCredits = async (needed) => {
     }
 }
 
-let creditUtilizationLogs = []
-
 let runAlgorithm = async (requiredCredits, campaignId, businessOwnerId) => {
     let accumulatedCredits = 0
     let index = 0
+    let matchStage = {$expr: {$and: [{ $eq: ["$businessOwnerId",businessOwnerId]},{ $ne: ["$remainingCredits",0]}]}}
+    const bonuscreditlogs = await BonusCreditLogModel.aggregate([{$match: matchStage}])
+    // console.log("BonusCreditLogs")
+    // console.log(bonuscreditlogs)
+
     while(true) {
         if(bonuscreditlogs[index].remainingCredits >= requiredCredits-accumulatedCredits){
-            bonuscreditlogs[index].remainingCredits -=  requiredCredits-accumulatedCredits
+            let tempValue = bonuscreditlogs[index].remainingCredits -=  requiredCredits-accumulatedCredits
+            await BonusCreditLogModel.findByIdAndUpdate(bonuscreditlogs[index]._id, {remainingCredits: tempValue})
             let creditUtilLog = {
-                "_id":index,
                 "campaignId":campaignId,
                 "businessOwnerId":businessOwnerId,
                 "lienCredits": requiredCredits-accumulatedCredits,
-                "utilizedCredits": 0
+                "utilizedCredits": 0,
+                "bonusCreditLogId": bonuscreditlogs[index]._id 
             }
-            creditUtilizationLogs.push(creditUtilLog)
+            await CreditConsumptionLogModel.create(creditUtilLog)
             break
         }
         else{
-            bonuscreditlogs[index].remainingCredits = 0
+            // bonuscreditlogs[index].remainingCredits = 0
+            await BonusCreditLogModel.findByIdAndUpdate(bonuscreditlogs[index]._id, {remainingCredits: 0})
+
             accumulatedCredits+= bonuscreditlogs[index].credits
             let creditUtilLog = {
-                "_id":index,
                 "campaignId":campaignId,
                 "businessOwnerId":businessOwnerId,
                 "lienCredits": bonuscreditlogs[index].credits,
-                "utilizedCredits": 0
+                "utilizedCredits": 0,
+                "bonusCreditLogId": bonuscreditlogs[index]._id
             }
-            creditUtilizationLogs.push(creditUtilLog)
+            // creditUtilizationLogs.push(creditUtilLog)
+            await CreditConsumptionLogModel.create(creditUtilLog)
+            // await BonusCreditLogModel.updateMany(bonuscreditlogs)
             index++
         }
     }
+
+    return true
 }
 
 let createCampaign = async (requiredCredits, businessOwnerId) => {
     // check if availableCredits from bonus are enough to perform the trxn
-    if(await calculateAvailableCredits(requiredCredits)){
-        console.log("Credits are enough")
-        let campaignDoc = {
-            "_id":9999,
-            "creditsNeeded":requiredCredits,
-            "businessOwnerId": businessOwnerId
-        }
-        campaigns.push(campaignDoc)
-        await runAlgorithm(requiredCredits, campaignDoc._id, businessOwnerId)
+    let checkNeeded = await calculateAvailableCredits(requiredCredits, businessOwnerId)
+    if(checkNeeded){
+        // console.log("Credits are enough")
+        const campaignDoc = await CampaignLogModel.create({
+            creditsNeeded: requiredCredits,
+            businessOwnerId: businessOwnerId
+        })
+        let runAlgo = await runAlgorithm(requiredCredits, campaignDoc._id, businessOwnerId)
+        if(runAlgo)
+            return {status:true, data: campaignDoc}
     }
     else{
         console.log("Add additional credits")
+        return {status:false}
     }
 }
 
-let consumeCredits = async(costPerDay) => {
+let consumeCredits = async(costPerDay, campaignId) => {
     // retrieve non zero consumption logs based on campainId
-    let tempCreditLogsIds = creditUtilizationLogs.filter((doc) => {
-        if(doc.utilizedCredits != doc.lienCredits){
-            return doc;
-        }
-    })
+    // await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // console.log(`Campaign Id: ${campaignId} ${typeof campaignId}`)
+
+    let matchStage = {$expr: {$and: [{ $eq: ["$campaignId",campaignId]},{ $ne: ["$lienCredits","$utilizedCredits"]}]}}
+
+    let consumptionDocs = await CreditConsumptionLogModel.aggregate([{$match: matchStage}])
+    console.log(consumptionDocs)
 
     // console.log("Filtered Credit Logs")
     // console.log(tempCreditLogsIds)
@@ -98,24 +111,25 @@ let consumeCredits = async(costPerDay) => {
 
     while(requiredCredits != accumulatedCredits){
         console.log(`Index: ${index} StillNeeded: ${requiredCredits - accumulatedCredits}`)
-        if(tempCreditLogsIds[index].lienCredits - tempCreditLogsIds[index].utilizedCredits >= requiredCredits - accumulatedCredits){
-            tempCreditLogsIds[index].utilizedCredits += requiredCredits - accumulatedCredits
+        if(consumptionDocs[index].lienCredits - consumptionDocs[index].utilizedCredits >= requiredCredits - accumulatedCredits){
+            let tempValue = consumptionDocs[index].utilizedCredits + (requiredCredits - accumulatedCredits)
+            await CreditConsumptionLogModel.findByIdAndUpdate(consumptionDocs[index]._id,{utilizedCredits: tempValue})
             accumulatedCredits += requiredCredits - accumulatedCredits
         }
         else{
-            accumulatedCredits += tempCreditLogsIds[index].lienCredits-tempCreditLogsIds[index].utilizedCredits
-            tempCreditLogsIds[index].utilizedCredits += tempCreditLogsIds[index].lienCredits-tempCreditLogsIds[index].utilizedCredits
+            accumulatedCredits += consumptionDocs[index].lienCredits-consumptionDocs[index].utilizedCredits
+            let tempValue = consumptionDocs[index].utilizedCredits + (consumptionDocs[index].lienCredits-consumptionDocs[index].utilizedCredits)
+            await CreditConsumptionLogModel.findByIdAndUpdate(consumptionDocs[index]._id,{utilizedCredits: tempValue})
             index++
         }
     }
 
-    console.log(tempCreditLogsIds)
 }
 
-let runFullCampaign = async (costPerDay) => {
-    await consumeCredits(costPerDay);
-    await consumeCredits(costPerDay);
-    await consumeCredits(costPerDay);
+let runFullCampaign = async (costPerDay, campaignId) => {
+    await consumeCredits(costPerDay, campaignId);
+    await consumeCredits(costPerDay, campaignId);
+    await consumeCredits(costPerDay, campaignId);
 }
 
 
@@ -129,49 +143,67 @@ let mainProgram = async() => {
         remainingCredits: {type: Number},
         businessOwnerId: {type: ObjectID},
     }, {timestamps: true})
-    const BonusCreditLogModel = mongoose.model('BonusCreditLogModel', BonusCreditLog);
+    BonusCreditLogModel = mongoose.model('BonusCreditLogModel', BonusCreditLog);
 
     const CampaignLog = new Schema ({
         creditsNeeded: {type: Number},
         businessOwnerId: {type: ObjectID}
     }, {timestamps: true})
-    const CampaignLogModel = mongoose.model('CampaignLogModel', CampaignLog);
+    CampaignLogModel = mongoose.model('CampaignLogModel', CampaignLog);
 
     const CreditConsumptionLog = new Schema({
         campaignId: {type: ObjectID},
         businessOwnerId: {type: ObjectID},
+        bonusCreditLogId: {type: ObjectID},
         lienCredits: {type: Number},
         utilizedCredits: {type: Number}
     }, {timestamps: true})
-    const CreditConsumptionLogModel = mongoose.model('CreditConsumptionLogModel', CreditConsumptionLog);
+    CreditConsumptionLogModel = mongoose.model('CreditConsumptionLogModel', CreditConsumptionLog);
 
-    // await createBonusCreditLogs("631ca82bbba3e72a189129fa")
-    let credits = [10,20]
-    credits.forEach(async (credit)=> {
-        await BonusCreditLogModel.create({
-            businessOwnerId: ObjectID("631ca82bbba3e72a189129fa"),
-            credits: credit,
-            remainingCredits: credit
-        })
-    })
+    // creating bonusCreditLogs for testing purpose
+    let generatedBusinessOwnerId = new ObjectId()
+    console.debug(generatedBusinessOwnerId)
 
-    await createCampaign(21,765874)
+    let createBonusDocs = await createBonusCreditLogs(generatedBusinessOwnerId)
+    
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
-    console.log(creditUtilizationLogs)
-    console.log(campaigns)
-    console.log(bonuscreditlogs)
-    await runFullCampaign(7)
+    let campaignDoc = null;
+
+    if(createBonusDocs){
+        let creditsNeededForCampaign = 21
+        campaignDoc = await createCampaign(creditsNeededForCampaign,generatedBusinessOwnerId)
+        // await new Promise(resolve => setTimeout(resolve, 1000));
+
+    }
+
+    // console.log(`CampaignDoc: ${campaignDoc}`)
+
+    if(campaignDoc.status){
+        let perDayCost = 7
+        // await new Promise(resolve => setTimeout(resolve, 1000));
+        await runFullCampaign(perDayCost, campaignDoc["data"]._id)
+    }
 }
 
 let createBonusCreditLogs = async (businessOwnerId) => {
-    let credits = [10,20]
-    credits.forEach(async (credit)=> {
-        await BonusCreditLogModel.create({
-            businessOwnerId: businessOwnerId,
-            credits: credit,
-            remainingCredits: credit
+    try {
+        let credits = [10,20]
+        let preparedRecords = []
+        credits.forEach(async (credit)=> {
+            let preparedDoc = {
+                businessOwnerId: businessOwnerId,
+                credits: credit,
+                remainingCredits: credit        
+            }
+            preparedRecords.push(preparedDoc);
         })
-    })
+    
+        let addAll = await BonusCreditLogModel.insertMany(preparedRecords)
+        return true
+    } catch (error) {
+        return false
+    }
 }
 
 mainProgram()
