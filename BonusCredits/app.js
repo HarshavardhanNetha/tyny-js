@@ -206,4 +206,29 @@ let createBonusCreditLogs = async (businessOwnerId) => {
     }
 }
 
-mainProgram()
+const redisConn = async () => {
+    
+    const redis = require("redis");
+    const redisclient = redis.createClient();
+    
+    (async () => {
+        await redisclient.connect({url: 'redis://localhost:6379', legacyMode: true,   defaults: {
+            socket: {
+              connectTimeout: 50000,
+            },
+          },});
+    })();
+    
+    console.log("Connecting to the Redis");
+    
+    redisclient.on("ready", () => {
+        console.log("Connected!");
+    });
+    
+    redisclient.on("error", (err) => {
+        console.log("Error in the Connection");
+    });
+}
+
+// mainProgram()
+redisConn()
